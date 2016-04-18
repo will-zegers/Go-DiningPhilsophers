@@ -22,12 +22,12 @@ type Philosopher struct {
 }
 
 var rgen *rand.Rand
-var reqFork sync.Cond
+var forkMutex sync.Cond
 
 // init initializes the random number generator
 func init() {
 	rgen    = rand.New(rand.NewSource(time.Now().Unix() ) )
-	reqFork = sync.Cond{L: &sync.Mutex{} }
+	forkMutex = sync.Cond{L: &sync.Mutex{} }
 }
 
 // Think causes a philosopher to sleep for THINK_MIN_NS to THINK_MAX_NS
@@ -50,16 +50,16 @@ func (p Philosopher) Eat() {
 // right. The method uses a monitor to guarantee that philosophers won't be
 // preempted between getting forks, preventing potential deadlock 
 func (p Philosopher) GetForks() {
-	reqFork.L.Lock()
+	forkMutex.L.Lock()
 	for {
 		select {
 		case _ = <-f.Forks[p.Left_idx]:
 			_ = <-f.Forks[p.Right_idx]
-			reqFork.L.Unlock()
-			reqFork.Signal()
+			forkMutex.L.Unlock()
+			forkMutex.Signal()
 			return
 		default:
-			reqFork.Wait()
+			forkMutex.Wait()
 		}
 	}
 }
