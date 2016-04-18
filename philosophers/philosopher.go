@@ -3,6 +3,7 @@ package philosopher
 import (
 	"fmt"
 	"time"
+	"sync"
 	"math/rand"
 	f "dp/forks"
 )
@@ -21,10 +22,12 @@ type Philosopher struct {
 }
 
 var rgen *rand.Rand
+var reqFork sync.Cond
 
 // init initializes the random number generator
 func init() {
-	rgen = rand.New(rand.NewSource(time.Now().Unix() ) )
+	rgen    = rand.New(rand.NewSource(time.Now().Unix() ) )
+	reqFork = sync.Cond{L: &sync.Mutex{} }
 }
 
 // Think causes a philosopher to sleep for THINK_MIN_NS to THINK_MAX_NS
@@ -44,11 +47,21 @@ func (p Philosopher) Eat() {
 }
 
 // GetForks acquires forks (i.e., data in the forks channel) from left to
-// right. After a call to get forks, the accessed channels will be empty,
-// causing other philosophers attempting to access these channels to block
+// right. The method uses a monitor to guarantee that philosophers won't be
+// preempted between getting forks, preventing potential deadlock 
 func (p Philosopher) GetForks() {
-	_ = <-f.Forks[p.Left_idx]
-	_ = <-f.Forks[p.Right_idx]
+	reqFork.L.Lock()
+	for {
+		select {
+		case _ = <-f.Forks[p.Left_idx]:
+			_ = <-f.Forks[p.Right_idx]
+			reqFork.L.Unlock()
+			reqFork.Signal()
+			return
+		default:
+			reqFork.Wait()
+		}
+	}
 }
 
 // ReplaceForks puts single data values back in appropriate forks channels,
