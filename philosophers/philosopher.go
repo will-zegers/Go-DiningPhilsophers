@@ -22,26 +22,33 @@ type Philosopher struct {
 }
 
 var rgen *rand.Rand
+var randMutex sync.Mutex
 
 // init initializes the random number generator
 func init() {
-	rgen    = rand.New(rand.NewSource(time.Now().Unix() ) )
-	f.ForkMutex = sync.Cond{L: &sync.Mutex{} }
+	rgen = rand.New(rand.NewSource(time.Now().Unix() ) )
+	randMutex   = sync.Mutex{}
 }
 
 // Think causes a philosopher to sleep for THINK_MIN_NS to THINK_MAX_NS
 // nanoseconds, and returns once he's done.
 func (p Philosopher) Think() {
+	randMutex.Lock()
 	r := rgen.Int63n(THINK_MIN_NS) + THINK_MAX_NS - THINK_MIN_NS
-	fmt.Printf("Philosopher %d is thinking\r\n", p.Id)
+	randMutex.Unlock()
+
+	fmt.Printf("[+] Philosopher %d is thinking\r\n", p.Id)
 	time.Sleep(time.Duration(r)*time.Nanosecond)
 }
 
 // Eat causes a philosopher to eat for EAT_MIN_NS to EAT_MAX_NS nanoseconds,
 // and returns once he's done
 func (p Philosopher) Eat() {
+	randMutex.Lock()
 	r := rgen.Int63n(EAT_MIN_NS) + EAT_MAX_NS - EAT_MIN_NS
-	fmt.Printf("Philosopher %d is eating\r\n", p.Id)
+	randMutex.Unlock()
+
+	fmt.Printf("[+] Philosopher %d is eating\r\n", p.Id)
 	time.Sleep(time.Duration(r)*time.Nanosecond)
 }
 
@@ -55,7 +62,6 @@ func (p Philosopher) GetForks() {
 		case _ = <-f.Forks[p.Left_idx]:
 			_ = <-f.Forks[p.Right_idx]
 			f.ForkMutex.L.Unlock()
-			f.ForkMutex.Signal()
 			return
 		default:
 			f.ForkMutex.Wait()
@@ -69,6 +75,7 @@ func (p Philosopher) GetForks() {
 func (p Philosopher) ReplaceForks() {
 	f.Forks[p.Left_idx]  <- true
 	f.Forks[p.Right_idx] <- true
+	f.ForkMutex.Signal()
 }
 
 // Run follows the step specifications of the Dining Philosophers problem,
